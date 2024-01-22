@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple To-Do App</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+
+    <!-- Vue.js -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+
+<div id="app" class="container mt-5">
+    <div class="row">
+        <div class="col-12">
+            <div v-if="alert" class="alert alert-danger mb-2" role="alert">
+                {{ alert }}
+            </div>
+            <div class="input-group mb-3">
+                <input v-model="new_task_title" @keyup.enter="createTask()" type="text" class="form-control form-control-sm" placeholder="название задачи">
+                <button @click="createTask()" class="btn btn-sm btn-outline-success" type="button">добавить</button>
+                <!-- <button @click="getAllTasks()" class="btn btn-sm btn-outline-primary" type="button">обновить</button> -->
+            </div>
+            <div v-if="edited_mode" class="input-group mb-3">
+                <input v-model="edited_task_title" @keyup.enter="updateTask()" type="text" class="form-control form-control-sm">
+                <button @click="updateTask()" class="btn btn-sm btn-outline-success" type="button">подтвердить</button>
+                <button @click="editModeFalse()" class="btn btn-sm btn-outline-warning" type="button">отменить</button>
+            </div>
+            <ol class="list-group list-group-numbered">
+                <li v-for="task in tasks_list" :key="task.id" class="list-group-item d-flex justify-content-between align-items-start">
+                    <div class="ms-2 me-auto">
+                        {{ task.title }}
+                    </div>
+                    <div class="btn-group" role="group" aria-label="Basic outlined example">
+                        <button @click="editModeTrue(task.id, task.title)" type="button" class="btn btn-sm btn-outline-primary">изменить</button>
+                        <button @click="deleteTask(task.id)" type="button" class="btn btn-sm btn-outline-danger">удалить</button>
+                    </div>
+                </li>                
+              </ol>
+        </div>
+    </div>
+</div>
+
+<script>
+    const app = Vue.createApp({
+        data() {
+            return {
+                new_task_title: '',
+                tasks_list: [],
+                edited_task_id: null,
+                edited_task_title: '',
+                edited_mode: false,
+                deleted_task_id: null,
+                alert: '',
+            };
+        },
+        mounted() {
+            this.getAllTasks();
+        },
+        methods: {
+            // получить список всех задач с сервера
+            getAllTasks() {
+                // послать GET запрос на сервер для получения списка всех задач
+                axios.get('http://localhost:8080/tasks')
+                    .then(response => {
+                        this.tasks_list = response.data;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching tasks:', error);
+                        // выводить предупреждение
+                        this.alert = 'ошибка получения списка задач с сервера: ' + error;
+                        // устанавливаем таймер на обнуление переменной через 5 секунд
+                        setTimeout(() => {
+                            this.alert = '';
+                        }, 5000);
+                    });
+                // выключить режим редактирования задачи
+                this.editModeFalse()
+            },
+            // создать новую задачу
+            createTask() {
+                // проверить что название не пустое
+                if (this.new_task_title != '') {
+                    // послать POST запрос на сервер для создания задачи
+                    axios.post('http://localhost:8080/task', {
+                            title: this.new_task_title
+                        })
+                        .then(response => {
+                            // проверяем наличие ключа "status" и его значение
+                            if (response.data && response.data.status === 'success') {
+                                // обнулить название новой задачи
+                                this.new_task_title = '';
+                                // обновить список задач
+                                this.getAllTasks();
+                            } else {
+                                // выводить предупреждение
+                                this.alert = 'ошибка создания новой задачи на сервере (200)';
+                                // устанавливаем таймер на обнуление переменной через 5 секунд
+                                setTimeout(() => {
+                                    this.alert = '';
+                                }, 5000);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error creating task:', error);
+                        });
+                } else {
+                    // выключить режим редактирования задачи
+                    this.editModeFalse();
+                    // выводить предупреждение
+                    this.alert = 'название задачи не должно быть пустым';
+                    // устанавливаем таймер на обнуление переменной через 5 секунд
+                    setTimeout(() => {
+                        this.alert = '';
+                    }, 5000);
+                }
+            },
+            // включить режим редактирования задачи
+            editModeTrue(taskId, taskTitle) {
+                // включить режим редактирования
+                this.edited_mode = true;
+                // присвоить id
+                this.edited_task_id = taskId;
+                // присвоить название
+                this.edited_task_title = taskTitle;
+            },
+            // выключить режим редактирования задачи
+            editModeFalse() {
+                // выключить режим редактирования
+                this.edited_mode = false;
+                // обнулить id
+                this.edited_task_id = null;
+                // обнулить название
+                this.edited_task_title = '';
+            },
+            // обновить существующую задачу
+            updateTask() {
+                // проверить что включен режим редактирования задачи
+                // проверить что id редактируемой задачи не равен нулл
+                // проверить что название редактируемой задачи не равно пустой строке
+                if ((this.edited_mode == true) && (this.edited_task_id != null) && (this.edited_task_title != '')) {
+                    // послать PUT запрос на сервер для обновления задачи
+                    axios.put(`http://localhost:8080/task/${this.edited_task_id}`, {
+                            title: this.edited_task_title
+                        })
+                        .then(response => {
+                            // проверяем наличие ключа "status" и его значение
+                            if (response.data && response.data.status === 'success') {
+                                // обновить список задач
+                                this.getAllTasks();
+                            } else {
+                                // выводить предупреждение
+                                this.alert = 'ошибка обновления существующей задачи на сервере (200)';
+                                // устанавливаем таймер на обнуление переменной через 5 секунд
+                                setTimeout(() => {
+                                    this.alert = '';
+                                }, 5000);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error updating task:', error);
+                        });
+                } else {
+                    // выводить предупреждение
+                    this.alert = 'название задачи не должно быть пустым';
+                    // устанавливаем таймер на обнуление переменной через 5 секунд
+                    setTimeout(() => {
+                        this.alert = '';
+                    }, 5000);
+                }
+            },
+            // удалить существующую задачу
+            deleteTask(taskId) {
+                // присвоить id
+                this.deleted_task_id = taskId;
+                // проверить что id удаляемой задачи не равен нулл
+                if (this.deleted_task_id != null) {
+                    // послать DELETE запрос на сервер для удаления задачи
+                    axios.delete(`http://localhost:8080/task/${this.deleted_task_id}`)
+                        .then(response => {
+                            // проверяем наличие ключа "status" и его значение
+                            if (response.data && response.data.status === 'success') {
+                                // обновить список задач
+                                this.getAllTasks();
+                            } else {
+                                // выводить предупреждение
+                                this.alert = 'ошибка удаления существующей задачи на сервере (200)';
+                                // устанавливаем таймер на обнуление переменной через 5 секунд
+                                setTimeout(() => {
+                                    this.alert = '';
+                                }, 5000);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error deleting task:', error);
+                        });
+                }
+            }
+        }
+    });
+
+    app.mount('#app');
+</script>
+
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+
+</body>
+</html>
